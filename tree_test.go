@@ -23,22 +23,11 @@ import (
 // }
 
 // Used as a workaround since we can't compare functions or their addresses
-var fakeHandlerValue string
+var fakeHandleValue string
 
-type FakeHandler struct {
-	value string
-}
-
-func (f *FakeHandler) Handle(params Params) {
-	fakeHandlerValue = f.value
-}
-
-// Make sure FakeHandler conforms with Handler interface
-var _ Handler = &FakeHandler{}
-
-func fakeHandler(val string) Handler {
-	return &FakeHandler{
-		value: val,
+func fakeHandle(val string) Handle {
+	return func(params Params) {
+		fakeHandleValue = val
 	}
 }
 
@@ -56,19 +45,19 @@ func getParams() *Params {
 
 func checkRequests(t *testing.T, tree *node, requests testRequests) {
 	for _, request := range requests {
-		handler, psp, _ := tree.getValue(request.path, getParams)
+		handle, psp, _ := tree.getValue(request.path, getParams)
 
 		switch {
-		case handler == nil:
+		case handle == nil:
 			if !request.nilHandler {
 				t.Errorf("handle mismatch for route '%s': Expected non-nil handle", request.path)
 			}
 		case request.nilHandler:
 			t.Errorf("handle mismatch for route '%s': Expected nil handle", request.path)
 		default:
-			handler.Handle(nil)
-			if fakeHandlerValue != request.route {
-				t.Errorf("handle mismatch for route '%s': Wrong handle (%s != %s)", request.path, fakeHandlerValue, request.route)
+			handle.(func(params Params))(nil)
+			if fakeHandleValue != request.route {
+				t.Errorf("handle mismatch for route '%s': Wrong handle (%s != %s)", request.path, fakeHandleValue, request.route)
 			}
 		}
 
@@ -89,7 +78,7 @@ func checkPriorities(t *testing.T, n *node) uint32 {
 		prio += checkPriorities(t, n.children[i])
 	}
 
-	if n.handler != nil {
+	if n.handle != nil {
 		prio++
 	}
 
@@ -129,7 +118,7 @@ func TestTreeAddAndGet(t *testing.T) {
 		"/β",
 	}
 	for _, route := range routes {
-		tree.addRoute(route, fakeHandler(route))
+		tree.addRoute(route, fakeHandle(route))
 	}
 
 	// printChildren(tree, "")
@@ -171,7 +160,7 @@ func TestTreeWildcard(t *testing.T) {
 		"/info/:user/project/:project",
 	}
 	for _, route := range routes {
-		tree.addRoute(route, fakeHandler(route))
+		tree.addRoute(route, fakeHandle(route))
 	}
 
 	// printChildren(tree, "")
@@ -281,7 +270,7 @@ func TestTreeDupliatePath(t *testing.T) {
 	for i := range routes {
 		route := routes[i]
 		recv := catchPanic(func() {
-			tree.addRoute(route, fakeHandler(route))
+			tree.addRoute(route, fakeHandle(route))
 		})
 		if recv != nil {
 			t.Fatalf("panic inserting route '%s': %v", route, recv)
@@ -349,7 +338,7 @@ func TestTreeCatchAllConflictRoot(t *testing.T) {
 func TestTreeCatchMaxParams(t *testing.T) {
 	tree := &node{}
 	route := "/cmd/*filepath"
-	tree.addRoute(route, fakeHandler(route))
+	tree.addRoute(route, fakeHandle(route))
 }
 
 func TestTreeDoubleWildcard(t *testing.T) {
@@ -407,7 +396,7 @@ func TestTreeTrailingSlashRedirect(t *testing.T) {
 	for i := range routes {
 		route := routes[i]
 		recv := catchPanic(func() {
-			tree.addRoute(route, fakeHandler(route))
+			tree.addRoute(route, fakeHandle(route))
 		})
 		if recv != nil {
 			t.Fatalf("panic inserting route '%s': %v", route, recv)
@@ -434,9 +423,9 @@ func TestTreeTrailingSlashRedirect(t *testing.T) {
 		"/vendor/x",
 	}
 	for _, route := range tsrRoutes {
-		handler, _, tsr := tree.getValue(route, nil)
-		if handler != nil {
-			t.Fatalf("non-nil handler for TSR route '%s", route)
+		handle, _, tsr := tree.getValue(route, nil)
+		if handle != nil {
+			t.Fatalf("non-nil handle for TSR route '%s", route)
 		} else if !tsr {
 			t.Errorf("expected TSR recommendation for route '%s'", route)
 		}
@@ -451,9 +440,9 @@ func TestTreeTrailingSlashRedirect(t *testing.T) {
 		"/api/world/abc",
 	}
 	for _, route := range noTsrRoutes {
-		handler, _, tsr := tree.getValue(route, nil)
-		if handler != nil {
-			t.Fatalf("non-nil handler for No-TSR route '%s", route)
+		handle, _, tsr := tree.getValue(route, nil)
+		if handle != nil {
+			t.Fatalf("non-nil handle for No-TSR route '%s", route)
 		} else if tsr {
 			t.Errorf("expected no TSR recommendation for route '%s'", route)
 		}
@@ -464,15 +453,15 @@ func TestTreeRootTrailingSlashRedirect(t *testing.T) {
 	tree := &node{}
 
 	recv := catchPanic(func() {
-		tree.addRoute("/:test", fakeHandler("/:test"))
+		tree.addRoute("/:test", fakeHandle("/:test"))
 	})
 	if recv != nil {
 		t.Fatalf("panic inserting test route: %v", recv)
 	}
 
-	handler, _, tsr := tree.getValue("/", nil)
-	if handler != nil {
-		t.Fatalf("non-nil handler")
+	handle, _, tsr := tree.getValue("/", nil)
+	if handle != nil {
+		t.Fatalf("non-nil handle")
 	} else if tsr {
 		t.Errorf("expected no TSR recommendation")
 	}
@@ -523,7 +512,7 @@ func TestTreeFindCaseInsensitivePath(t *testing.T) {
 	for i := range routes {
 		route := routes[i]
 		recv := catchPanic(func() {
-			tree.addRoute(route, fakeHandler(route))
+			tree.addRoute(route, fakeHandle(route))
 		})
 		if recv != nil {
 			t.Fatalf("panic inserting route '%s': %v", route, recv)
@@ -645,8 +634,8 @@ func TestTreeInvalidNodeType(t *testing.T) {
 	const panicMsg = "invalid node type"
 
 	tree := &node{}
-	tree.addRoute("/", fakeHandler("/"))
-	tree.addRoute("/:page", fakeHandler("/:page"))
+	tree.addRoute("/", fakeHandle("/"))
+	tree.addRoute("/:page", fakeHandle("/:page"))
 
 	// set invalid node type
 	tree.children[0].nType = 42
@@ -697,11 +686,11 @@ func TestTreeWildcardConflictEx(t *testing.T) {
 
 		for i := range routes {
 			route := routes[i]
-			tree.addRoute(route, fakeHandler(route))
+			tree.addRoute(route, fakeHandle(route))
 		}
 
 		recv := catchPanic(func() {
-			tree.addRoute(conflict.route, fakeHandler(conflict.route))
+			tree.addRoute(conflict.route, fakeHandle(conflict.route))
 		})
 
 		if !regexp.MustCompile(fmt.Sprintf("'%s' in new path .* conflicts with existing wildcard '%s' in existing prefix '%s'", conflict.segPath, conflict.existSegPath, conflict.existPath)).MatchString(fmt.Sprint(recv)) {
@@ -721,7 +710,7 @@ func TestRedirectTrailingSlash(t *testing.T) {
 
 	node := &node{}
 	for _, item := range data {
-		node.addRoute(item.path, fakeHandler("test"))
+		node.addRoute(item.path, fakeHandle("test"))
 	}
 
 	_, _, tsr := node.getValue("/hello/abx/", nil)

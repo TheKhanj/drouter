@@ -1,23 +1,55 @@
 package drouter
 
-import "sync"
+import (
+	"context"
+	"sync"
+)
 
-type Tsr bool
-
+// Param is a single URL parameter, consisting of a key and a value.
 type Param struct {
 	Key   string
 	Value string
 }
 
+// Params is a Param-slice, as returned by the router.
+// The slice is ordered, the first URL parameter is also the first slice value.
+// It is therefore safe to read values by the index.
 type Params []Param
+
+// ByName returns the value of the first Param which key matches the given name.
+// If no matching Param is found, an empty string is returned.
+func (ps Params) ByName(name string) string {
+	for _, p := range ps {
+		if p.Key == name {
+			return p.Value
+		}
+	}
+	return ""
+}
 
 type paramsKey struct{}
 
 var ParamsKey = paramsKey{}
 
-type Handler interface {
-	Handle(params Params)
+// ParamsFromContext pulls the URL parameters from a request context,
+// or returns nil if none are present.
+func ParamsFromContext(ctx context.Context) Params {
+	p, _ := ctx.Value(ParamsKey).(Params)
+	return p
 }
+
+// MatchedRoutePathParam is the Param name under which the path of the matched
+// route is stored, if Router.SaveMatchedRoutePath is set.
+var MatchedRoutePathParam = "$matchedRoutePath"
+
+// MatchedRoutePath retrieves the path of the matched route.
+// Router.SaveMatchedRoutePath must have been enabled when the respective
+// handle was added, otherwise this function always returns an empty string.
+func (ps Params) MatchedRoutePath() string {
+	return ps.ByName(MatchedRoutePathParam)
+}
+
+type Handle interface{}
 
 type Router struct {
 	root *node
@@ -38,34 +70,34 @@ func (r *Router) putParams(ps *Params) {
 	}
 }
 
-func (r *Router) Lookup(path string) (Handler, Params, Tsr) {
+func (r *Router) Lookup(path string) (Handle, Params, bool) {
 	root := r.root
 
 	if root == nil {
 		return nil, nil, false
 	}
 
-	handler, ps, tsr := root.getValue(path, r.getParams)
+	handle, ps, tsr := root.getValue(path, r.getParams)
 
-	if handler == nil {
+	if handle == nil {
 		r.putParams(ps)
 		return nil, nil, tsr
 	}
 
 	if ps == nil {
-		return handler, nil, tsr
+		return handle, nil, tsr
 	}
 
-	return handler, *ps, tsr
+	return handle, *ps, tsr
 }
 
-func (r *Router) AddRoute(path string, handler Handler) {
+func (r *Router) AddRoute(path string, handle Handle) {
 	if len(path) < 1 || path[0] != '/' {
 		panic("path must begin with '/' in path '" + path + "'")
 	}
 
-	if handler == nil {
-		panic("handler must not be nil")
+	if handle == nil {
+		panic("handle must not be nil")
 	}
 
 	root := r.root
@@ -75,7 +107,7 @@ func (r *Router) AddRoute(path string, handler Handler) {
 		r.root = root
 	}
 
-	root.addRoute(path, handler)
+	root.addRoute(path, handle)
 
 	r.updateMaxParams(path)
 	r.lazyInitParamsPool()
