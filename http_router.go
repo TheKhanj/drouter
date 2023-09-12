@@ -105,9 +105,9 @@ func httpRoutingPathToPath(path string) string {
 	panic("added a route which is not http")
 }
 
-// New returns a new initialized Router.
+// NewHttpRouter returns a new initialized Router.
 // Path auto-correction, including trailing slashes, is enabled by default.
-func New() *HttpRouter {
+func NewHttpRouter() *HttpRouter {
 	return &HttpRouter{
 		methods: []string{},
 

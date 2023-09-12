@@ -58,6 +58,10 @@ type Router struct {
 	maxParams  uint16
 }
 
+func NewRouter() *Router {
+	return &Router{}
+}
+
 func (r *Router) getParams() *Params {
 	ps, _ := r.paramsPool.Get().(*Params)
 	*ps = (*ps)[0:0]
