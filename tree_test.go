@@ -6,7 +6,6 @@ package drouter
 
 import (
 	"fmt"
-	"net/http"
 	"reflect"
 	"regexp"
 	"strings"
@@ -26,9 +25,20 @@ import (
 // Used as a workaround since we can't compare functions or their addresses
 var fakeHandlerValue string
 
-func fakeHandler(val string) Handle {
-	return func(http.ResponseWriter, *http.Request, Params) {
-		fakeHandlerValue = val
+type FakeHandler struct {
+	value string
+}
+
+func (f *FakeHandler) Handle(params Params) {
+	fakeHandlerValue = f.value
+}
+
+// Make sure FakeHandler conforms with Handler interface
+var _ Handler = &FakeHandler{}
+
+func fakeHandler(val string) Handler {
+	return &FakeHandler{
+		value: val,
 	}
 }
 
@@ -56,7 +66,7 @@ func checkRequests(t *testing.T, tree *node, requests testRequests) {
 		case request.nilHandler:
 			t.Errorf("handle mismatch for route '%s': Expected nil handle", request.path)
 		default:
-			handler(nil, nil, nil)
+			handler.Handle(nil)
 			if fakeHandlerValue != request.route {
 				t.Errorf("handle mismatch for route '%s': Wrong handle (%s != %s)", request.path, fakeHandlerValue, request.route)
 			}
@@ -79,7 +89,7 @@ func checkPriorities(t *testing.T, n *node) uint32 {
 		prio += checkPriorities(t, n.children[i])
 	}
 
-	if n.handle != nil {
+	if n.handler != nil {
 		prio++
 	}
 

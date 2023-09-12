@@ -2,7 +2,7 @@ package drouter
 
 import "sync"
 
-type tsr bool
+type Tsr bool
 
 type Param struct {
 	Key   string
@@ -38,7 +38,7 @@ func (r *Router) putParams(ps *Params) {
 	}
 }
 
-func (r *Router) Lookup(path string) (Handler, Params, tsr) {
+func (r *Router) Lookup(path string) (Handler, Params, Tsr) {
 	root := r.root
 
 	if root == nil {
