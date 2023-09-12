@@ -1,7 +1,5 @@
 package drouter
 
-type Router struct{}
-
 type Param struct {
 	Key   string
 	Value string
@@ -15,4 +13,14 @@ var ParamsKey = paramsKey{}
 
 type Handler interface {
 	Handle(params Params)
+}
+
+type Router struct{}
+
+type Tsr bool
+
+func (r *Router) Lookup(path string) (Handler, Tsr) {
+}
+
+func (r *Router) AddRoute(path string, handler Handler) {
 }
