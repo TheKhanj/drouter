@@ -51,7 +51,7 @@ func findWildcard(path string) (wilcard string, i int, valid bool) {
 	return "", -1, false
 }
 
-func countParams(path string) uint16 {
+func CountParams(path string) uint16 {
 	var n uint
 	for i := range []byte(path) {
 		switch path[i] {
@@ -323,7 +323,7 @@ func (n *node) insertChild(path, fullPath string, handler Handle) {
 // If no handler can be found, a TSR (trailing slash redirect) recommendation
 // is made if a handler exists with an extra (without the) trailing slash for
 // the given path.
-func (n *node) getValue(path string, params func() *Params) (handler Handle, ps *Params, tsr bool) {
+func (n *node) getValue(path string, params *Params) (handler Handle, tsr bool) {
 walk: // Outer loop for walking the tree
 	for {
 		prefix := n.path
@@ -362,13 +362,10 @@ walk: // Outer loop for walking the tree
 
 					// Save param value
 					if params != nil {
-						if ps == nil {
-							ps = params()
-						}
 						// Expand slice within preallocated capacity
-						i := len(*ps)
-						*ps = (*ps)[:i+1]
-						(*ps)[i] = Param{
+						i := len(*params)
+						*params = (*params)[:i+1]
+						(*params)[i] = Param{
 							Key:   n.path[1:],
 							Value: path[:end],
 						}
@@ -401,13 +398,10 @@ walk: // Outer loop for walking the tree
 				case catchAll:
 					// Save param value
 					if params != nil {
-						if ps == nil {
-							ps = params()
-						}
 						// Expand slice within preallocated capacity
-						i := len(*ps)
-						*ps = (*ps)[:i+1]
-						(*ps)[i] = Param{
+						i := len(*params)
+						*params = (*params)[:i+1]
+						(*params)[i] = Param{
 							Key:   n.path[2:],
 							Value: path,
 						}

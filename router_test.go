@@ -12,10 +12,11 @@ func TestRouterLookup(t *testing.T) {
 	}
 	wantParams := Params{Param{"name", "gopher"}}
 
-	router := NewRouter()
+	router := New()
 
 	// try empty router first
-	handle, _, tsr := router.Lookup("/nope")
+	params := make(Params, 0, 1)
+	handle, tsr := router.Lookup("/nope", &params)
 	if handle != nil {
 		t.Fatalf("Got handle for unregistered pattern: %v", handle)
 	}
@@ -25,7 +26,8 @@ func TestRouterLookup(t *testing.T) {
 
 	// insert route and try again
 	router.AddRoute("/user/:name", wantHandle)
-	handle, params, _ := router.Lookup("/user/gopher")
+	params = make(Params, 0, 1)
+	handle, _ = router.Lookup("/user/gopher", &params)
 	if handle == nil {
 		t.Fatal("Got no handle!")
 	} else {
@@ -41,7 +43,8 @@ func TestRouterLookup(t *testing.T) {
 
 	// route without param
 	router.AddRoute("/user", wantHandle)
-	handle, params, _ = router.Lookup("/user")
+	params = nil
+	handle, _ = router.Lookup("/user", &params)
 	if handle == nil {
 		t.Fatal("Got no handle!")
 	} else {
@@ -54,7 +57,8 @@ func TestRouterLookup(t *testing.T) {
 		t.Fatalf("Wrong parameter values: want %v, got %v", nil, params)
 	}
 
-	handle, _, tsr = router.Lookup("/user/gopher/")
+	params = make(Params, 0, 1)
+	handle, tsr = router.Lookup("/user/gopher/", &params)
 	if handle != nil {
 		t.Fatalf("Got handle for unregistered pattern: %v", handle)
 	}
@@ -62,7 +66,7 @@ func TestRouterLookup(t *testing.T) {
 		t.Error("Got no TSR recommendation!")
 	}
 
-	handle, _, tsr = router.Lookup("/nope")
+	handle, tsr = router.Lookup("/nope", &params)
 	if handle != nil {
 		t.Fatalf("Got handle for unregistered pattern: %v", handle)
 	}

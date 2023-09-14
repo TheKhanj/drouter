@@ -45,7 +45,8 @@ func getParams() *Params {
 
 func checkRequests(t *testing.T, tree *node, requests testRequests) {
 	for _, request := range requests {
-		handle, psp, _ := tree.getValue(request.path, getParams)
+		psp := getParams()
+		handle, _ := tree.getValue(request.path, psp)
 
 		switch {
 		case handle == nil:
@@ -62,7 +63,7 @@ func checkRequests(t *testing.T, tree *node, requests testRequests) {
 		}
 
 		var ps Params
-		if psp != nil {
+		if len(*psp) != 0 {
 			ps = *psp
 		}
 
@@ -93,10 +94,10 @@ func checkPriorities(t *testing.T, n *node) uint32 {
 }
 
 func TestCountParams(t *testing.T) {
-	if countParams("/path/:param1/static/*catch-all") != 2 {
+	if CountParams("/path/:param1/static/*catch-all") != 2 {
 		t.Fail()
 	}
-	if countParams(strings.Repeat("/:param", 256)) != 256 {
+	if CountParams(strings.Repeat("/:param", 256)) != 256 {
 		t.Fail()
 	}
 }
@@ -423,7 +424,7 @@ func TestTreeTrailingSlashRedirect(t *testing.T) {
 		"/vendor/x",
 	}
 	for _, route := range tsrRoutes {
-		handle, _, tsr := tree.getValue(route, nil)
+		handle, tsr := tree.getValue(route, nil)
 		if handle != nil {
 			t.Fatalf("non-nil handle for TSR route '%s", route)
 		} else if !tsr {
@@ -440,7 +441,7 @@ func TestTreeTrailingSlashRedirect(t *testing.T) {
 		"/api/world/abc",
 	}
 	for _, route := range noTsrRoutes {
-		handle, _, tsr := tree.getValue(route, nil)
+		handle, tsr := tree.getValue(route, nil)
 		if handle != nil {
 			t.Fatalf("non-nil handle for No-TSR route '%s", route)
 		} else if tsr {
@@ -459,7 +460,7 @@ func TestTreeRootTrailingSlashRedirect(t *testing.T) {
 		t.Fatalf("panic inserting test route: %v", recv)
 	}
 
-	handle, _, tsr := tree.getValue("/", nil)
+	handle, tsr := tree.getValue("/", nil)
 	if handle != nil {
 		t.Fatalf("non-nil handle")
 	} else if tsr {
@@ -713,7 +714,7 @@ func TestRedirectTrailingSlash(t *testing.T) {
 		node.addRoute(item.path, fakeHandle("test"))
 	}
 
-	_, _, tsr := node.getValue("/hello/abx/", nil)
+	_, tsr := node.getValue("/hello/abx/", nil)
 	if tsr != true {
 		t.Fatalf("want true, is false")
 	}

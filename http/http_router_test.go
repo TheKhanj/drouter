@@ -2,7 +2,7 @@
 // Use of this source code is governed by a BSD-style license that can be found
 // in the LICENSE file.
 
-package drouter
+package http
 
 import (
 	"errors"
@@ -11,6 +11,8 @@ import (
 	"net/http/httptest"
 	"reflect"
 	"testing"
+
+	"github.com/thekhanj/drouter"
 )
 
 type mockResponseWriter struct{}
@@ -30,10 +32,10 @@ func (m *mockResponseWriter) WriteString(s string) (n int, err error) {
 func (m *mockResponseWriter) WriteHeader(int) {}
 
 func TestParams(t *testing.T) {
-	ps := Params{
-		Param{"param1", "value1"},
-		Param{"param2", "value2"},
-		Param{"param3", "value3"},
+	ps := drouter.Params{
+		drouter.Param{Key: "param1", Value: "value1"},
+		drouter.Param{Key: "param2", Value: "value2"},
+		drouter.Param{Key: "param3", Value: "value3"},
 	}
 	for i := range ps {
 		if val := ps.ByName(ps[i].Key); val != ps[i].Value {
@@ -46,16 +48,20 @@ func TestParams(t *testing.T) {
 }
 
 func TestRouter(t *testing.T) {
-	router := NewHttpRouter()
+	router := New()
 
 	routed := false
-	router.Handle(http.MethodGet, "/user/:name", func(w http.ResponseWriter, r *http.Request, ps Params) {
-		routed = true
-		want := Params{Param{"name", "gopher"}}
-		if !reflect.DeepEqual(ps, want) {
-			t.Fatalf("wrong wildcard values: want %v, got %v", want, ps)
-		}
-	})
+	router.Handle(
+		http.MethodGet,
+		"/user/:name",
+		func(w http.ResponseWriter, r *http.Request, ps drouter.Params) {
+			routed = true
+			want := drouter.Params{drouter.Param{Key: "name", Value: "gopher"}}
+			if !reflect.DeepEqual(ps, want) {
+				t.Fatalf("wrong wildcard values: want %v, got %v", want, ps)
+			}
+		},
+	)
 
 	w := new(mockResponseWriter)
 
@@ -80,26 +86,26 @@ func TestRouterAPI(t *testing.T) {
 
 	httpHandler := handlerStruct{&handler}
 
-	router := NewHttpRouter()
-	router.GET("/GET", func(w http.ResponseWriter, r *http.Request, _ Params) {
+	router := New()
+	router.GET("/GET", func(w http.ResponseWriter, r *http.Request, _ drouter.Params) {
 		get = true
 	})
-	router.HEAD("/GET", func(w http.ResponseWriter, r *http.Request, _ Params) {
+	router.HEAD("/GET", func(w http.ResponseWriter, r *http.Request, _ drouter.Params) {
 		head = true
 	})
-	router.OPTIONS("/GET", func(w http.ResponseWriter, r *http.Request, _ Params) {
+	router.OPTIONS("/GET", func(w http.ResponseWriter, r *http.Request, _ drouter.Params) {
 		options = true
 	})
-	router.POST("/POST", func(w http.ResponseWriter, r *http.Request, _ Params) {
+	router.POST("/POST", func(w http.ResponseWriter, r *http.Request, _ drouter.Params) {
 		post = true
 	})
-	router.PUT("/PUT", func(w http.ResponseWriter, r *http.Request, _ Params) {
+	router.PUT("/PUT", func(w http.ResponseWriter, r *http.Request, _ drouter.Params) {
 		put = true
 	})
-	router.PATCH("/PATCH", func(w http.ResponseWriter, r *http.Request, _ Params) {
+	router.PATCH("/PATCH", func(w http.ResponseWriter, r *http.Request, _ drouter.Params) {
 		patch = true
 	})
-	router.DELETE("/DELETE", func(w http.ResponseWriter, r *http.Request, _ Params) {
+	router.DELETE("/DELETE", func(w http.ResponseWriter, r *http.Request, _ drouter.Params) {
 		delete = true
 	})
 	router.Handler(http.MethodGet, "/Handler", httpHandler)
@@ -164,10 +170,19 @@ func TestRouterAPI(t *testing.T) {
 	}
 }
 
-func TestRouterInvalidInput(t *testing.T) {
-	router := NewHttpRouter()
+func catchPanic(testFunc func()) (recv interface{}) {
+	defer func() {
+		recv = recover()
+	}()
 
-	handle := func(_ http.ResponseWriter, _ *http.Request, _ Params) {}
+	testFunc()
+	return
+}
+
+func TestRouterInvalidInput(t *testing.T) {
+	router := New()
+
+	handle := func(_ http.ResponseWriter, _ *http.Request, _ drouter.Params) {}
 
 	recv := catchPanic(func() {
 		router.Handle("", "/", handle)
@@ -199,18 +214,18 @@ func TestRouterInvalidInput(t *testing.T) {
 }
 
 func TestRouterChaining(t *testing.T) {
-	router1 := NewHttpRouter()
-	router2 := NewHttpRouter()
+	router1 := New()
+	router2 := New()
 	router1.NotFound = router2
 
 	fooHit := false
-	router1.POST("/foo", func(w http.ResponseWriter, req *http.Request, _ Params) {
+	router1.POST("/foo", func(w http.ResponseWriter, req *http.Request, _ drouter.Params) {
 		fooHit = true
 		w.WriteHeader(http.StatusOK)
 	})
 
 	barHit := false
-	router2.POST("/bar", func(w http.ResponseWriter, req *http.Request, _ Params) {
+	router2.POST("/bar", func(w http.ResponseWriter, req *http.Request, _ drouter.Params) {
 		barHit = true
 		w.WriteHeader(http.StatusOK)
 	})
@@ -241,9 +256,9 @@ func TestRouterChaining(t *testing.T) {
 }
 
 func BenchmarkAllowed(b *testing.B) {
-	handlerFunc := func(_ http.ResponseWriter, _ *http.Request, _ Params) {}
+	handlerFunc := func(_ http.ResponseWriter, _ *http.Request, _ drouter.Params) {}
 
-	router := NewHttpRouter()
+	router := New()
 	router.POST("/path", handlerFunc)
 	router.GET("/path", handlerFunc)
 
@@ -262,9 +277,9 @@ func BenchmarkAllowed(b *testing.B) {
 }
 
 func TestRouterOPTIONS(t *testing.T) {
-	handlerFunc := func(_ http.ResponseWriter, _ *http.Request, _ Params) {}
+	handlerFunc := func(_ http.ResponseWriter, _ *http.Request, _ drouter.Params) {}
 
-	router := NewHttpRouter()
+	router := New()
 	router.POST("/path", handlerFunc)
 
 	// test not allowed
@@ -327,7 +342,7 @@ func TestRouterOPTIONS(t *testing.T) {
 
 	// custom handler
 	var custom bool
-	router.OPTIONS("/path", func(w http.ResponseWriter, r *http.Request, _ Params) {
+	router.OPTIONS("/path", func(w http.ResponseWriter, r *http.Request, _ drouter.Params) {
 		custom = true
 	})
 
@@ -358,9 +373,9 @@ func TestRouterOPTIONS(t *testing.T) {
 }
 
 func TestRouterNotAllowed(t *testing.T) {
-	handlerFunc := func(_ http.ResponseWriter, _ *http.Request, _ Params) {}
+	handlerFunc := func(_ http.ResponseWriter, _ *http.Request, _ drouter.Params) {}
 
-	router := NewHttpRouter()
+	router := New()
 	router.POST("/path", handlerFunc)
 
 	// test not allowed
@@ -407,9 +422,9 @@ func TestRouterNotAllowed(t *testing.T) {
 }
 
 func TestRouterNotFound(t *testing.T) {
-	handlerFunc := func(_ http.ResponseWriter, _ *http.Request, _ Params) {}
+	handlerFunc := func(_ http.ResponseWriter, _ *http.Request, _ drouter.Params) {}
 
-	router := NewHttpRouter()
+	router := New()
 	router.GET("/path", handlerFunc)
 	router.GET("/dir/", handlerFunc)
 	router.GET("/", handlerFunc)
@@ -461,7 +476,7 @@ func TestRouterNotFound(t *testing.T) {
 	}
 
 	// Test special case where no node for the prefix "/" exists
-	router = NewHttpRouter()
+	router = New()
 	router.GET("/a", handlerFunc)
 	r, _ = http.NewRequest(http.MethodGet, "/", nil)
 	w = httptest.NewRecorder()
@@ -472,14 +487,14 @@ func TestRouterNotFound(t *testing.T) {
 }
 
 func TestRouterPanicHandler(t *testing.T) {
-	router := NewHttpRouter()
+	router := New()
 	panicHandled := false
 
 	router.PanicHandler = func(rw http.ResponseWriter, r *http.Request, p interface{}) {
 		panicHandled = true
 	}
 
-	router.Handle(http.MethodPut, "/user/:name", func(_ http.ResponseWriter, _ *http.Request, _ Params) {
+	router.Handle(http.MethodPut, "/user/:name", func(_ http.ResponseWriter, _ *http.Request, _ drouter.Params) {
 		panic("oops!")
 	})
 
@@ -502,10 +517,10 @@ func TestRouterPanicHandler(t *testing.T) {
 func TestRouterParamsFromContext(t *testing.T) {
 	routed := false
 
-	wantParams := Params{Param{"name", "gopher"}}
+	wantParams := drouter.Params{drouter.Param{Key: "name", Value: "gopher"}}
 	handlerFunc := func(_ http.ResponseWriter, req *http.Request) {
 		// get params from request context
-		params := ParamsFromContext(req.Context())
+		params := drouter.ParamsFromContext(req.Context())
 
 		if !reflect.DeepEqual(params, wantParams) {
 			t.Fatalf("Wrong parameter values: want %v, got %v", wantParams, params)
@@ -514,10 +529,10 @@ func TestRouterParamsFromContext(t *testing.T) {
 		routed = true
 	}
 
-	var nilParams Params
+	var nilParams drouter.Params
 	handlerFuncNil := func(_ http.ResponseWriter, req *http.Request) {
 		// get params from request context
-		params := ParamsFromContext(req.Context())
+		params := drouter.ParamsFromContext(req.Context())
 
 		if !reflect.DeepEqual(params, nilParams) {
 			t.Fatalf("Wrong parameter values: want %v, got %v", nilParams, params)
@@ -525,7 +540,7 @@ func TestRouterParamsFromContext(t *testing.T) {
 
 		routed = true
 	}
-	router := NewHttpRouter()
+	router := New()
 	router.HandlerFunc(http.MethodGet, "/user", handlerFuncNil)
 	router.HandlerFunc(http.MethodGet, "/user/:name", handlerFunc)
 
@@ -547,7 +562,7 @@ func TestRouterParamsFromContext(t *testing.T) {
 func TestRouterMatchedRoutePath(t *testing.T) {
 	route1 := "/user/:name"
 	routed1 := false
-	handle1 := func(_ http.ResponseWriter, req *http.Request, ps Params) {
+	handle1 := func(_ http.ResponseWriter, req *http.Request, ps drouter.Params) {
 		route := ps.MatchedRoutePath()
 		if route != route1 {
 			t.Fatalf("Wrong matched route: want %s, got %s", route1, route)
@@ -557,7 +572,7 @@ func TestRouterMatchedRoutePath(t *testing.T) {
 
 	route2 := "/user/:name/details"
 	routed2 := false
-	handle2 := func(_ http.ResponseWriter, req *http.Request, ps Params) {
+	handle2 := func(_ http.ResponseWriter, req *http.Request, ps drouter.Params) {
 		route := ps.MatchedRoutePath()
 		if route != route2 {
 			t.Fatalf("Wrong matched route: want %s, got %s", route2, route)
@@ -567,7 +582,7 @@ func TestRouterMatchedRoutePath(t *testing.T) {
 
 	route3 := "/"
 	routed3 := false
-	handle3 := func(_ http.ResponseWriter, req *http.Request, ps Params) {
+	handle3 := func(_ http.ResponseWriter, req *http.Request, ps drouter.Params) {
 		route := ps.MatchedRoutePath()
 		if route != route3 {
 			t.Fatalf("Wrong matched route: want %s, got %s", route3, route)
@@ -575,7 +590,7 @@ func TestRouterMatchedRoutePath(t *testing.T) {
 		routed3 = true
 	}
 
-	router := NewHttpRouter()
+	router := New()
 	router.SaveMatchedRoutePath = true
 	router.Handle(http.MethodGet, route1, handle1)
 	router.Handle(http.MethodGet, route2, handle2)
@@ -613,7 +628,7 @@ func (mfs *mockFileSystem) Open(name string) (http.File, error) {
 }
 
 func TestRouterServeFiles(t *testing.T) {
-	router := NewHttpRouter()
+	router := New()
 	mfs := &mockFileSystem{}
 
 	recv := catchPanic(func() {

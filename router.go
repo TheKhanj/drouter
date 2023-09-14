@@ -1,9 +1,6 @@
 package drouter
 
-import (
-	"context"
-	"sync"
-)
+import "context"
 
 // Param is a single URL parameter, consisting of a key and a value.
 type Param struct {
@@ -53,46 +50,26 @@ type Handle interface{}
 
 type Router struct {
 	root *node
-
-	paramsPool sync.Pool
-	maxParams  uint16
 }
 
-func NewRouter() *Router {
+func New() *Router {
 	return &Router{}
 }
 
-func (r *Router) getParams() *Params {
-	ps, _ := r.paramsPool.Get().(*Params)
-	*ps = (*ps)[0:0]
-	return ps
-}
-
-func (r *Router) putParams(ps *Params) {
-	if ps != nil {
-		r.paramsPool.Put(ps)
-	}
-}
-
-func (r *Router) Lookup(path string) (Handle, Params, bool) {
+func (r *Router) Lookup(path string, params *Params) (Handle, bool) {
 	root := r.root
 
 	if root == nil {
-		return nil, nil, false
+		return nil, false
 	}
 
-	handle, ps, tsr := root.getValue(path, r.getParams)
+	handle, tsr := root.getValue(path, params)
 
-	if handle == nil {
-		r.putParams(ps)
-		return nil, nil, tsr
+	if params == nil {
+		return handle, tsr
 	}
 
-	if ps == nil {
-		return handle, nil, tsr
-	}
-
-	return handle, *ps, tsr
+	return handle, tsr
 }
 
 func (r *Router) AddRoute(path string, handle Handle) {
@@ -112,24 +89,8 @@ func (r *Router) AddRoute(path string, handle Handle) {
 	}
 
 	root.addRoute(path, handle)
-
-	r.updateMaxParams(path)
-	r.lazyInitParamsPool()
 }
 
-func (r *Router) lazyInitParamsPool() {
-	if !(r.paramsPool.New == nil && r.maxParams > 0) {
-		return
-	}
-
-	r.paramsPool.New = func() interface{} {
-		ps := make(Params, 0, r.maxParams)
-		return &ps
-	}
-}
-
-func (r *Router) updateMaxParams(path string) {
-	if paramsCount := countParams(path); paramsCount > r.maxParams {
-		r.maxParams = paramsCount
-	}
+func (r *Router) FindCaseInsensitivePath(path string, fixTrailingSlash bool) (fixedPath string, found bool) {
+	return r.root.findCaseInsensitivePath(path, fixTrailingSlash)
 }
